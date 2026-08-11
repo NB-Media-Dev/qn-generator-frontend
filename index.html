@@ -223,7 +223,14 @@
     <div id="resultActions">
       <button id="downloadAllBtn" class="btn btn-outline">Download All (TXT)</button>
       <button id="downloadAllJsonBtn" class="btn btn-outline">Download All (JSON)</button>
+      <select id="genPushExamType" class="push-exam-type" aria-label="Live exam type for this batch">
+        <option value="daily">Daily</option>
+        <option value="online">Online</option>
+        <option value="schedule">Schedule</option>
+      </select>
+      <button id="genPushBtn" class="btn btn-push" disabled title="Sends every question just generated to the live exam database.">Push to Live</button>
     </div>
+    <p id="genPushStatus" class="push-status-text"></p>
     <div id="questionList"></div>
   </div>
 
@@ -289,7 +296,7 @@
       'Bio Maths': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Biology'],
       'Computer Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Computer Science'],
       'Pure Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Botany', 'Zoology'],
-      'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Business Mathematics']
+      'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Computer Application']
     };
 
     const ANSWER_LETTER_TO_NUM = { A: '1', B: '2', C: '3', D: '4' };
@@ -394,6 +401,9 @@
     const resultActions = el('resultActions');
     const downloadAllBtn = el('downloadAllBtn');
     const downloadAllJsonBtn = el('downloadAllJsonBtn');
+    const genPushExamType = el('genPushExamType');
+    const genPushBtn = el('genPushBtn');
+    const genPushStatus = el('genPushStatus');
     const loadHistoryBtn = el('loadHistoryBtn');
     const historyStatus = el('historyStatus'), historyList = el('historyList');
     const historySearch = el('historySearch');
@@ -455,6 +465,8 @@
       questionList.innerHTML = '';
       loadingText.style.display = 'block';
       resultActions.style.display = 'none';
+      genPushBtn.disabled = true;
+      genPushStatus.textContent = '';
       generateBtn.disabled = true;
 
       const curriculum = currentCurriculum();
@@ -493,6 +505,9 @@
           }
           renderQuestions(questionList, data.questions);
           resultActions.style.display = 'flex';
+          genPushStatus.textContent = '';
+          genPushBtn.disabled = !lastBatchId || !data.questions.length;
+          genPushBtn.textContent = 'Push to Live';
           checkReady();
         })
         .catch(err => {
@@ -606,15 +621,8 @@
     downloadAllBtn.addEventListener('click', () => downloadAsText(lastQuestions, state.difficulty + '_all'));
     downloadAllJsonBtn.addEventListener('click', () => downloadAsJSON(lastQuestions, state.difficulty + '_all', state.subject, state.standard));
 
-    async function pushQuestionsToLive(dyQuesIds, examType, statusEl, btnEl, baseLabel) {
-      if (dyQuesIds.length === 0) {
-        statusEl.textContent = 'Nothing to push - none of these questions have a dy_ques_id yet.';
-        statusEl.style.color = 'var(--coral)';
-        return;
-      }
-      if (!confirm('Push ' + dyQuesIds.length + ' question(s) to the LIVE "' + examType + '" database? This cannot be undone.')) {
-        return;
-      }
+    async function pushToLiveRequest(body, statusEl, btnEl, baseLabel, confirmMsg) {
+      if (!confirm(confirmMsg)) { return; }
       btnEl.disabled = true;
       btnEl.textContent = 'Pushing...';
       statusEl.textContent = '';
@@ -622,7 +630,7 @@
         const r = await fetch(API + '/push-to-live', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exam_type: examType, dy_ques_ids: dyQuesIds })
+          body: JSON.stringify(body)
         });
         const data = await r.json();
         if (!r.ok) { throw new Error(data.detail || ('Server error: ' + r.status)); }
@@ -640,6 +648,38 @@
         btnEl.textContent = baseLabel;
       }
     }
+
+    async function pushQuestionsToLive(dyQuesIds, examType, statusEl, btnEl, baseLabel) {
+      if (dyQuesIds.length === 0) {
+        statusEl.textContent = 'Nothing to push - none of these questions have a dy_ques_id yet.';
+        statusEl.style.color = 'var(--coral)';
+        return;
+      }
+      await pushToLiveRequest(
+        { exam_type: examType, dy_ques_ids: dyQuesIds },
+        statusEl, btnEl, baseLabel,
+        'Push ' + dyQuesIds.length + ' question(s) to the LIVE "' + examType + '" database? This cannot be undone.'
+      );
+    }
+
+    // Pushes everything from the batch that was just generated (identified by
+    // batch_id, same batch already saved to the DB by /generate-questions),
+    // rather than requiring dy_ques_id on the client - the freshly generated
+    // questions shown on screen don't carry that field yet.
+    genPushBtn.addEventListener('click', async () => {
+      if (!lastBatchId) {
+        genPushStatus.textContent = 'Nothing to push - generate questions first.';
+        genPushStatus.style.color = 'var(--coral)';
+        return;
+      }
+      const examType = genPushExamType.value;
+      const count = (lastQuestions && lastQuestions.length) || 0;
+      await pushToLiveRequest(
+        { exam_type: examType, batch_id: lastBatchId },
+        genPushStatus, genPushBtn, 'Push to Live',
+        'Push ' + (count || 'these') + ' question(s) to the LIVE "' + examType + '" database? This cannot be undone.'
+      );
+    });
 
     const jsonPushDropZone = el('jsonPushDropZone');
     const jsonPushFileInput = el('jsonPushFileInput');
