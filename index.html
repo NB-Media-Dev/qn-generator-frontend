@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Question Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Full-page, responsive layout. Overrides any narrow fixed-width box
+       from style.css so the app fills the browser like a real website on
+       desktop, and reflows cleanly on phones instead of floating in the
+       middle of a mostly-blank page. */
+    html, body { height: 100%; }
+    body {
+      max-width: 1100px !important;
+      width: 92% !important;
+      margin: 0 auto !important;
+      padding: 32px 0 64px !important;
+      box-sizing: border-box !important;
+      min-height: 100vh;
+    }
+    .section { box-sizing: border-box; }
+    @media (max-width: 700px) {
+      body { width: 94% !important; padding: 18px 0 48px !important; }
+      h1 { font-size: 24px !important; }
+      .option-grid { grid-template-columns: 1fr !important; }
+      .json-push-controls, .history-toolbar, .history-batch-push-row { flex-direction: column; align-items: stretch !important; }
+      #jsonPushExamCode, #historySearch { width: 100% !important; }
+    }
+
+    .curriculum-select {
+      padding: 10px 12px; font-family: inherit; font-size: 14px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink);
+      background-color: #fff; box-sizing: border-box; transition: border-color 0.15s ease;
+    }
+    .curriculum-select:focus { outline: none; border-color: var(--teal); }
+    .curriculum-badge {
+      display: inline-block; font-size: 12px; font-weight: 600; color: var(--teal-dark);
+      background-color: var(--teal-tint); padding: 3px 8px; border-radius: 4px; margin-bottom: 10px;
+    }
+
+    /* option buttons (count + difficulty) */
+    .option-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px; margin-top: 12px;
+    }
+    .option-btn {
+      padding: 18px 10px; font-family: inherit; font-size: 16px;
+      background-color: var(--card-bg); color: var(--ink-soft);
+      border: 1.5px solid var(--border); border-radius: 6px;
+      cursor: pointer; text-align: center; transition: 0.15s ease;
+    }
+    .option-btn:hover { border-color: var(--teal); background-color: var(--teal-tint); }
+    #countGrid .option-btn.selected { background-color: var(--teal); color: #fff; border-color: var(--teal); }
+    #diffGrid .option-btn[data-value="easy"].selected { background-color: var(--teal); color: #fff; border-color: var(--teal); }
+    #diffGrid .option-btn[data-value="moderate"].selected { background-color: var(--amber); color: #fff; border-color: var(--amber); }
+    #diffGrid .option-btn[data-value="hard"].selected { background-color: var(--coral); color: #fff; border-color: var(--coral); }
+
+    #generateWrap { text-align: center; background: none; border: none; padding: 0; }
+    #generateBtn { padding: 14px 40px; font-size: 16px; }
+
+    /* upload drop zone */
+    .drop-zone {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 100%; height: 200px; margin-top: 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; cursor: pointer; background-color: #FAFBFC;
+      text-align: center; box-sizing: border-box; transition: 0.15s ease;
+    }
+    .drop-zone:hover, .drop-zone.has-file { border-color: var(--teal); background-color: var(--teal-tint); }
+    .drop-zone svg { width: 36px; height: 36px; margin-bottom: 10px; color: var(--muted); }
+    .drop-zone.has-file svg { color: var(--teal); }
+    .drop-zone p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+    input[type="file"] { display: none; }
+
+    #customCount {
+      display: none; margin-top: 12px; padding: 10px; width: 100%;
+      box-sizing: border-box; font-family: inherit; font-size: 15px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink);
+    }
+    #customCount:focus { outline: none; border-color: var(--teal); }
+
+    #results { min-height: 250px; padding: 30px; }
+    #placeholderText { color: var(--muted); font-size: 15px; }
+    #loadingText { display: none; color: var(--teal); font-weight: 600; text-align: center; }
+    #errorText {
+      display: none; color: var(--coral); font-weight: 600; text-align: center;
+      background-color: var(--coral-tint); padding: 12px; border-radius: 6px;
+    }
+    #shortfallNote {
+      display: none; color: var(--amber); font-weight: 600; text-align: center;
+      background-color: #FBF3E3; padding: 12px; border-radius: 6px; margin-bottom: 14px;
+    }
+
+    .q-caution {
+      display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700;
+      color: var(--amber); white-space: nowrap; cursor: help;
+    }
+
+    #resultActions { display: none; margin-top: 12px; gap: 10px; flex-wrap: wrap; align-items: center; }
+    #selectionStatus { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
+
+    /* JSON-file push-to-live section */
+    #jsonPushDropZone { height: 120px; }
+    .json-push-controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+    }
+    .json-push-controls label { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+    #jsonPushExamCode {
+      padding: 10px 12px; font-family: inherit; font-size: 14px; width: 160px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink); box-sizing: border-box;
+    }
+    #jsonPushExamCode:focus { outline: none; border-color: var(--teal); }
+    .json-push-force-label { display: flex; align-items: center; gap: 6px; font-weight: 400 !important; cursor: pointer; }
+    #jsonPushBtn { margin-top: 14px; }
+    #jsonPushStatus { font-size: 13.5px; margin-top: 10px; color: var(--muted); }
+
+    #historyStatus { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+    .history-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    #historySearch {
+      flex: 1; min-width: 200px; padding: 10px 12px; font-family: inherit; font-size: 14px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink); box-sizing: border-box;
+      transition: border-color 0.15s ease;
+    }
+    #historySearch:focus { outline: none; border-color: var(--teal); }
+    .history-batch { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 14px; transition: box-shadow 0.15s ease; }
+    .history-batch:hover { box-shadow: 0 2px 8px rgba(31, 41, 55, 0.06); }
+    .history-batch-header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+    }
+    .history-batch-meta { font-size: 13px; color: var(--ink-soft); }
+    .history-batch-meta .history-count { font-weight: 700; color: var(--ink); }
+    .history-batch .btn { padding: 7px 14px; font-size: 13px; }
+    .history-batch-questions { display: none; }
+    .history-batch-questions.expanded { display: block; }
+    .history-batch-selection { font-size: 12.5px; color: var(--muted); margin-top: 6px; display: none; }
+    .history-batch-selection.expanded { display: block; }
+    .history-toggle { background: none; border: none; color: var(--teal); font-weight: 600; font-size: 13.5px; cursor: pointer; padding: 0; }
+
+    .history-batch-push-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
+    }
+    .push-live-label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+    .push-exam-type {
+      padding: 6px 8px; font-family: inherit; font-size: 12.5px;
+      border: 1.5px solid var(--border); border-radius: 5px; color: var(--ink); background-color: #fff;
+    }
+    .push-exam-type:focus { outline: none; border-color: var(--teal); }
+    .btn-push { background-color: var(--teal-dark); color: #fff; border: 1.5px solid var(--teal-dark); }
+    .btn-push:hover:not(:disabled) { opacity: 0.9; }
+    .push-status-text { flex-basis: 100%; font-size: 12.5px; margin: 4px 0 0; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+  <h1>QN <span>Generator</span></h1>
+  <p class="app-subtitle">Turn your notes into practice questions.</p>
+
+  <div class="section">
+    <h2>Curriculum</h2>
+    <div class="option-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+      <select id="boardSelect" class="curriculum-select" aria-label="Select Board"></select>
+      <select id="standardSelect" class="curriculum-select" aria-label="Select Standard"></select>
+      <select id="groupSelect" class="curriculum-select" aria-label="Select Group" style="display:none;"></select>
+      <select id="subjectSelect" class="curriculum-select" aria-label="Select Subject"></select>
+    </div>
+    <div class="option-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 8px;">
+      <div>
+        <label for="dyCodeInput" style="display:block; font-size: 13px; color: var(--ink-soft); margin-bottom: 2px;">
+          Exam code (dy_code)
+        </label>
+        <input type="text" id="dyCodeInput" class="curriculum-select" placeholder="e.g. AISB8E02" style="text-transform: uppercase; width: 100%;" required>
+      </div>
+      <div>
+        <label for="quesIdPrefixInput" style="display:block; font-size: 13px; color: var(--ink-soft); margin-bottom: 2px;">
+          Question ID prefix (dy_ques_id)
+        </label>
+        <input type="text" id="quesIdPrefixInput" class="curriculum-select" placeholder="e.g. AI8EN2" style="text-transform: uppercase; width: 100%;" required>
+      </div>
+    </div>
+    <p style="color: var(--ink-soft); font-size: 12.5px; margin: 6px 0 0;">
+      Enter the exam code and question ID prefix for your generated questions.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Upload your notes</h2>
+    <label class="drop-zone" id="dropZone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p id="dropText">Drop your file here, or click to browse</p>
+      <input type="file" id="fileInput" aria-label="Choose file to upload">
+    </label>
+  </div>
+
+  <div class="section">
+    <h2>Select the Number of Questions You Need</h2>
+    <div class="option-grid" id="countGrid">
+      <button class="option-btn" data-value="5">5</button>
+      <button class="option-btn" data-value="10">10</button>
+      <button class="option-btn" data-value="20">20</button>
+      <button class="option-btn" data-value="30">30</button>
+      <button class="option-btn" data-value="custom">Custom</button>
+    </div>
+    <label for="customCount" class="sr-only">Custom number of questions</label>
+    <input type="number" id="customCount" placeholder="Enter number of questions">
+  </div>
+
+  <div class="section">
+    <h2>Select the Difficulty level of the Questions</h2>
+    <div class="option-grid" id="diffGrid">
+      <button class="option-btn" data-value="easy">Easy</button>
+      <button class="option-btn" data-value="moderate">Moderate</button>
+      <button class="option-btn" data-value="hard">Hard</button>
+    </div>
+  </div>
+
+  <div class="section" id="generateWrap">
+    <button id="generateBtn" class="btn btn-solid" disabled>Generate Questions</button>
+  </div>
+
+  <div class="section" id="results">
+    <h2>Your Questions from the uploaded File</h2>
+    <p id="placeholderText">Questions will appear here.</p>
+    <p id="loadingText">Generating your questions, please wait...</p>
+    <p id="errorText"></p>
+    <p id="shortfallNote"></p>
+    <div id="resultActions">
+      <button id="downloadAllBtn" class="btn btn-outline">Download All (TXT)</button>
+      <button id="downloadAllJsonBtn" class="btn btn-outline">Download All (JSON)</button>
+    </div>
+    <div id="questionList"></div>
+  </div>
+
+  <div class="section">
+    <h2>Previously Generated Questions</h2>
+    <button id="loadHistoryBtn" class="btn btn-outline">View All Saved Questions</button>
+    <a href="database.html" target="_blank" style="text-decoration: none;">
+      <button class="btn btn-outline" style="margin-left: 10px;">View Database</button>
+    </a>
+    <div class="history-toolbar">
+      <input type="text" id="historySearch" aria-label="Search saved questions" placeholder="Search your saved questions by text, file name, or difficulty...">
+    </div>
+    <p id="historyStatus"></p>
+    <div id="historyList"></div>
+  </div>
+
+  <div class="section">
+    <h2>Push a Questions JSON File to Live</h2>
+    <p style="color: var(--ink-soft); font-size: 14px; margin-top: -4px;">
+      Already have a questions JSON file (e.g. one you downloaded earlier)? Upload it here to push it
+      straight to the live exam database, without regenerating anything.
+    </p>
+    <label class="drop-zone" id="jsonPushDropZone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p id="jsonPushDropText">Drop your questions JSON file here, or click to browse</p>
+      <input type="file" id="jsonPushFileInput" accept="application/json,.json" aria-label="Choose questions JSON file to push">
+    </label>
+    <div class="json-push-controls">
+      <label for="jsonPushExamType">Exam type</label>
+      <select id="jsonPushExamType" class="push-exam-type" aria-label="Live exam type">
+        <option value="daily">Daily</option>
+        <option value="online">Online</option>
+        <option value="schedule">Schedule</option>
+      </select>
+      <label for="jsonPushExamCode">Exam code (optional)</label>
+      <input type="text" id="jsonPushExamCode" placeholder="Uses each question's own code if blank">
+      <label class="json-push-force-label">
+        <input type="checkbox" id="jsonPushForce">
+        Re-push even if already pushed
+      </label>
+    </div>
+    <button id="jsonPushBtn" class="btn btn-push" disabled>Push JSON to Live</button>
+    <p id="jsonPushStatus"></p>
+  </div>
+
+  <script>
+    const API = (function () {
+      const params = new URLSearchParams(window.location.search);
+      const override = params.get('api');
+      if (override) return override.replace(/\/$/, '');
+      // When this page is served BY the FastAPI backend itself (e.g. mounted with
+      // StaticFiles, or opened through a tunnel/deployed URL), talk to whatever
+      // origin served it instead of a hardcoded address.
+      if (window.location.protocol !== 'file:' && window.location.origin !== 'null') {
+        return window.location.origin;
+      }
+      // Fallback for opening this file directly (file://) with the backend running locally.
+      return 'http://127.0.0.1:8000';
+    })();
+
+    const BOARDS = [
+      'CBSE',
+      'Tamil Nadu State Board (Tamil Medium)',
+      'Tamil Nadu State Board (English Medium)'
+    ];
+    const STANDARDS = ['6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+    const GROUPS = ['Bio Maths', 'Computer Science', 'Pure Science', 'Commerce'];
+
+    const SUBJECTS_DEFAULT = ['Tamil', 'English', 'Maths', 'Science', 'Social Science'];
+    const SUBJECTS_BY_GROUP = {
+      'Bio Maths': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Biology'],
+      'Computer Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Computer Science'],
+      'Pure Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Botany', 'Zoology'],
+      'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Business Mathematics']
+    };
+
+    const LANGUAGE_CODE_MAP = {
+      'Tamil': 'TA001', 'English': 'EN002', 'Maths': 'MA003', 'Science': 'SC004',
+      'Social Science': 'SO005', 'Physics': 'PH006', 'Chemistry': 'CH007', 'Biology': 'BI008',
+      'Computer Science': 'CS009', 'Botany': 'BO010', 'Zoology': 'ZO011', 'Commerce': 'CO012',
+      'Economics': 'EC013', 'Accountancy': 'AC014', 'Business Mathematics': 'BM015'
+    };
+
+
+    const QUES_PREFIX_MAP = {
+      'Tamil': 'TA', 'English': 'EN', 'Maths': 'MA', 'Science': 'SC',
+      'Social Science': 'SO', 'Physics': 'PH', 'Chemistry': 'CH', 'Biology': 'BI',
+      'Computer Science': 'CS', 'Botany': 'BO', 'Zoology': 'ZO', 'Commerce': 'CO',
+      'Economics': 'EC', 'Accountancy': 'AC', 'Business Mathematics': 'BM', 'Mathematics': 'MA'
+    };
+
+    const ANSWER_LETTER_TO_NUM = { A: '1', B: '2', C: '3', D: '4' };
+    const TAMIL_CHAR_RE = /[\u0B80-\u0BFF]/;
+    function detectLnCode(questionText) {
+      return TAMIL_CHAR_RE.test(questionText || '') ? 'LN01' : 'LN02';
+    }
+
+    function isSeniorStandard(standard) {
+      return standard === '11th' || standard === '12th';
+    }
+
+    function fillSelect(select, options, placeholder) {
+      select.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = placeholder;
+      select.appendChild(ph);
+      options.forEach(value => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        select.appendChild(opt);
+      });
+    }
+
+    const boardSelect = document.getElementById('boardSelect');
+    const standardSelect = document.getElementById('standardSelect');
+    const groupSelect = document.getElementById('groupSelect');
+    const subjectSelect = document.getElementById('subjectSelect');
+    const dyCodeInput = document.getElementById('dyCodeInput');
+    const quesIdPrefixInput = document.getElementById('quesIdPrefixInput');
+
+    function refreshStandardDependentUI() {
+      const senior = isSeniorStandard(standardSelect.value);
+      groupSelect.style.display = senior ? '' : 'none';
+      if (!senior) {
+        groupSelect.value = '';
+        fillSelect(subjectSelect, SUBJECTS_DEFAULT, 'Select subject');
+      } else {
+        const subjects = SUBJECTS_BY_GROUP[groupSelect.value] || [];
+        fillSelect(subjectSelect, subjects, subjects.length ? 'Select subject' : 'Select a group first');
+      }
+      checkReady();
+    }
+
+    fillSelect(boardSelect, BOARDS, 'Select board');
+    fillSelect(standardSelect, STANDARDS, 'Select standard');
+    fillSelect(groupSelect, GROUPS, 'Select group');
+    fillSelect(subjectSelect, SUBJECTS_DEFAULT, 'Select subject');
+
+    boardSelect.addEventListener('change', checkReady);
+    standardSelect.addEventListener('change', refreshStandardDependentUI);
+    groupSelect.addEventListener('change', refreshStandardDependentUI);
+    subjectSelect.addEventListener('change', checkReady);
+    dyCodeInput.addEventListener('input', checkReady);
+    quesIdPrefixInput.addEventListener('input', checkReady);
+
+    function currentCurriculum() {
+      const standard = standardSelect.value;
+      const senior = isSeniorStandard(standard);
+      return {
+        board: boardSelect.value,
+        standard: standard,
+        group_name: senior ? groupSelect.value : '',
+        subject: subjectSelect.value,
+        dy_code: dyCodeInput.value.trim(),
+        ques_id_prefix: quesIdPrefixInput.value.trim()
+      };
+    }
+
+    function curriculumIsComplete() {
+      const c = currentCurriculum();
+      if (!c.board || !c.standard || !c.subject) return false;
+      if (isSeniorStandard(c.standard) && !c.group_name) return false;
+      if (!c.dy_code) return false;
+      if (!c.ques_id_prefix) return false;
+      return true;
+    }
+
+    function getOwnerId() {
+      let id = localStorage.getItem('qngen_owner_id');
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : 'owner-' + Date.now() + '-' + (window.crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).toString(36));
+        localStorage.setItem('qngen_owner_id', id);
+      }
+      return id;
+    }
+    const OWNER_ID = getOwnerId();
+
+    const state = { file: null, count: null, difficulty: null, subject: null, standard: null };
+    let lastQuestions = [];
+    let lastBatchId = null;
+
+    const el = (id) => document.getElementById(id);
+    const generateBtn = el('generateBtn');
+    const dropZone = el('dropZone'), fileInput = el('fileInput'), dropText = el('dropText');
+    const countGrid = el('countGrid'), customCount = el('customCount'), diffGrid = el('diffGrid');
+    const shortfallNote = el('shortfallNote');
+    const placeholderText = el('placeholderText'), loadingText = el('loadingText'), errorText = el('errorText');
+    const questionList = el('questionList');
+    const resultActions = el('resultActions');
+    const downloadAllBtn = el('downloadAllBtn');
+    const downloadAllJsonBtn = el('downloadAllJsonBtn');
+    const loadHistoryBtn = el('loadHistoryBtn');
+    const historyStatus = el('historyStatus'), historyList = el('historyList');
+    const historySearch = el('historySearch');
+    let allHistoryQuestions = [];
+
+    function setFile(file) {
+      state.file = file;
+      dropText.textContent = 'Selected: ' + file.name;
+      dropZone.classList.add('has-file');
+      checkReady();
+    }
+    fileInput.addEventListener('change', () => fileInput.files.length && setFile(fileInput.files[0]));
+    dropZone.addEventListener('dragover', (e) => e.preventDefault());
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        setFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function setupGrid(grid, onSelect) {
+      grid.addEventListener('click', (e) => {
+        const btn = e.target.closest('.option-btn');
+        if (!btn) return;
+        grid.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        onSelect(btn.dataset.value);
+        checkReady();
+      });
+    }
+
+    setupGrid(countGrid, (value) => {
+      if (value === 'custom') {
+        customCount.style.display = 'block';
+        state.count = customCount.value ? Number.parseInt(customCount.value) : null;
+      } else {
+        customCount.style.display = 'none';
+        state.count = Number.parseInt(value);
+      }
+    });
+    customCount.addEventListener('input', () => {
+      state.count = customCount.value ? Number.parseInt(customCount.value) : null;
+      checkReady();
+    });
+
+    setupGrid(diffGrid, (value) => { state.difficulty = value; });
+
+    function checkReady() {
+      generateBtn.disabled = !(state.file && state.count && state.difficulty && curriculumIsComplete());
+    }
+
+    generateBtn.addEventListener('click', () => {
+      placeholderText.style.display = 'none';
+      errorText.style.display = 'none';
+      shortfallNote.style.display = 'none';
+      const oldBadge = document.getElementById('resultCurriculumBadge');
+      if (oldBadge) { oldBadge.remove(); }
+      questionList.innerHTML = '';
+      loadingText.style.display = 'block';
+      resultActions.style.display = 'none';
+      generateBtn.disabled = true;
+
+      const curriculum = currentCurriculum();
+      const formData = new FormData();
+      formData.append('file', state.file);
+      formData.append('count', state.count);
+      formData.append('difficulty', state.difficulty);
+      formData.append('owner_id', OWNER_ID);
+      formData.append('board', curriculum.board);
+      formData.append('standard', curriculum.standard);
+      formData.append('subject', curriculum.subject);
+      formData.append('dy_code', curriculum.dy_code);
+      formData.append('ques_id_prefix', curriculum.ques_id_prefix);
+      if (curriculum.group_name) { formData.append('group_name', curriculum.group_name); }
+
+      fetch(API + '/generate-questions', { method: 'POST', body: formData })
+        .then(r => { if (!r.ok) { throw new Error('Server error: ' + r.status); } return r.json(); })
+        .then(data => {
+          loadingText.style.display = 'none';
+          lastQuestions = data.questions;
+          lastBatchId = data.batch_id;
+          state.subject = data.subject;
+          state.standard = data.standard;
+          let badge = document.getElementById('resultCurriculumBadge');
+          if (!badge) {
+            badge = document.createElement('div');
+            badge.id = 'resultCurriculumBadge';
+            badge.className = 'curriculum-badge';
+            questionList.parentNode.insertBefore(badge, questionList);
+          }
+          badge.textContent = [data.board, data.standard, data.group_name, data.subject].filter(Boolean).join(' \u00b7 ');
+          const notes = [data.note, data.duplicate_note].filter(Boolean);
+          if (notes.length) {
+            shortfallNote.textContent = notes.join(' ');
+            shortfallNote.style.display = 'block';
+          }
+          renderQuestions(questionList, data.questions);
+          resultActions.style.display = 'flex';
+          checkReady();
+        })
+        .catch(err => {
+          loadingText.style.display = 'none';
+          errorText.textContent = 'Something went wrong: ' + err.message;
+          errorText.style.display = 'block';
+          checkReady();
+        });
+    });
+
+    function renderQuestions(container, questions) {
+      container.innerHTML = '';
+      questions.forEach((q, i) => {
+        const card = document.createElement('div');
+        card.className = 'q-card';
+
+        let optionsHTML = '';
+        for (const letter in q.options) {
+          optionsHTML += '<div class="q-option' + (letter === q.answer ? ' correct' : '') + '">' +
+            letter + '. ' + q.options[letter] + '</div>';
+        }
+        const explanationHTML = q.explanation
+          ? '<div class="q-explanation"><strong>Explanation:</strong> ' + q.explanation + '</div>'
+          : '';
+
+        const body = document.createElement('div');
+        body.className = 'q-card-body';
+        body.innerHTML = '<p class="q-text">' + (i + 1) + '. ' + q.question + '</p>' + optionsHTML + explanationHTML;
+
+        const row = document.createElement('div');
+        row.className = 'q-card-row';
+        row.appendChild(body);
+
+        if (q.duplicate) {
+          const pickWrap = document.createElement('div');
+          pickWrap.className = 'q-pick-wrap';
+          const caution = document.createElement('span');
+          caution.className = 'q-caution';
+          caution.textContent = '\u26A0 Repeated';
+          caution.title = 'This question already existed in the database for this file/curriculum, so it was not saved again.';
+          pickWrap.appendChild(caution);
+          row.appendChild(pickWrap);
+        }
+
+        card.appendChild(row);
+        container.appendChild(card);
+      });
+    }
+
+    function downloadAsText(questions, label) {
+      let text = 'Generated Questions (' + label + ')\n' + '='.repeat(40) + '\n\n';
+      questions.forEach((q, i) => {
+        text += (i + 1) + '. ' + q.question + '\n';
+        for (const letter in q.options) text += '   ' + letter + '. ' + q.options[letter] + '\n';
+        text += '   Correct Answer: ' + q.answer + '\n';
+        if (q.explanation) text += '   Explanation: ' + q.explanation + '\n';
+        text += '\n';
+      });
+
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'questions_' + label + '_' + stamp + '.txt';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadAsJSON(questions, label, subject, standard) {
+      const nowISO = new Date().toISOString();
+      const formatted = questions.map((q, index) => {
+        const num = String(index + 1).padStart(3, '0');
+        const fallbackPrefix = (q.dy_code || quesIdPrefixInput.value || dyCodeInput.value || 'AI').trim().toUpperCase();
+        return {
+          // dy_ques_id / dy_code / ln_code / dy_order / dy_pattern / dy_seconds
+          // are all permanently assigned by the server the moment a question
+          // is generated and saved (see _build_dy_rows + _save_generated_questions
+          // in app.py), and the server now returns every one of them. Always
+          // use the saved value here so a download can never disagree with
+          // what's actually in the database. Only fall back to a computed
+          // guess for old cached data that predates this fix.
+          "dy_ques_id": q.dy_ques_id || `${fallbackPrefix}${num}`,
+          "dy_code": q.dy_code != null ? q.dy_code : 'AITSB7S01',
+          "ln_code": q.ln_code || detectLnCode(q.question),
+          "dy_order": q.dy_order != null ? String(q.dy_order) : String(index + 1),
+          "dy_pattern": q.dy_pattern != null ? q.dy_pattern : 1,
+          "dy_seconds": q.dy_seconds != null ? q.dy_seconds : 18,
+          "dy_question": q.question || "",
+          "dy_image_name": "",
+          "dy_ans_1": q.options ? (q.options.A || "") : "",
+          "dy_ans_2": q.options ? (q.options.B || "") : "",
+          "dy_ans_3": q.options ? (q.options.C || "") : "",
+          "dy_ans_4": q.options ? (q.options.D || "") : "",
+          "dy_correct_ans": ANSWER_LETTER_TO_NUM[q.answer] || "",
+          "dy_explain": q.explanation || "",
+          "dy_explain_image_name": "",
+          "created_at": q.created_at || nowISO,
+          "updated_at": null
+        };
+      });
+
+      const jsonString = JSON.stringify(formatted, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'questions_' + label + '_' + stamp + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    downloadAllBtn.addEventListener('click', () => downloadAsText(lastQuestions, state.difficulty + '_all'));
+    downloadAllJsonBtn.addEventListener('click', () => downloadAsJSON(lastQuestions, state.difficulty + '_all', state.subject, state.standard));
+
+    // Sends the given dy_ques_ids to the live external exam database for the
+    // chosen exam type. Mirrors the /push-to-live backend contract in app.py.
+    async function pushQuestionsToLive(dyQuesIds, examType, statusEl, btnEl, baseLabel) {
+      if (dyQuesIds.length === 0) {
+        statusEl.textContent = 'Nothing to push - none of these questions have a dy_ques_id yet.';
+        statusEl.style.color = 'var(--coral)';
+        return;
+      }
+      if (!confirm('Push ' + dyQuesIds.length + ' question(s) to the LIVE "' + examType + '" database? This cannot be undone.')) {
+        return;
+      }
+      btnEl.disabled = true;
+      btnEl.textContent = 'Pushing...';
+      statusEl.textContent = '';
+      try {
+        const r = await fetch(API + '/push-to-live', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exam_type: examType, dy_ques_ids: dyQuesIds })
+        });
+        const data = await r.json();
+        if (!r.ok) { throw new Error(data.detail || ('Server error: ' + r.status)); }
+        statusEl.textContent = 'Pushed ' + data.pushed_count + ', skipped ' + data.skipped_already_pushed +
+          ' (already live), failed ' + data.failed_count + '.';
+        statusEl.style.color = data.failed_count ? 'var(--coral)' : 'var(--teal-dark)';
+        if (data.failed_count) {
+          console.warn('push-to-live failures', data.failed);
+        }
+      } catch (err) {
+        statusEl.textContent = 'Could not push to live: ' + err.message;
+        statusEl.style.color = 'var(--coral)';
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = baseLabel;
+      }
+    }
+
+    // --- Push a standalone questions JSON file straight to the live DB ---
+    // Mirrors the /push-json-to-live backend contract in app.py: a
+    // multipart/form-data POST with the file plus exam_type/exam_code/force.
+    const jsonPushDropZone = el('jsonPushDropZone');
+    const jsonPushFileInput = el('jsonPushFileInput');
+    const jsonPushDropText = el('jsonPushDropText');
+    const jsonPushExamType = el('jsonPushExamType');
+    const jsonPushExamCode = el('jsonPushExamCode');
+    const jsonPushForce = el('jsonPushForce');
+    const jsonPushBtn = el('jsonPushBtn');
+    const jsonPushStatus = el('jsonPushStatus');
+    let jsonPushFile = null;
+
+    function setJsonPushFile(file) {
+      jsonPushFile = file;
+      jsonPushDropText.textContent = 'Selected: ' + file.name;
+      jsonPushDropZone.classList.add('has-file');
+      jsonPushBtn.disabled = false;
+      jsonPushStatus.textContent = '';
+    }
+    jsonPushFileInput.addEventListener('change', () => jsonPushFileInput.files.length && setJsonPushFile(jsonPushFileInput.files[0]));
+    jsonPushDropZone.addEventListener('dragover', (e) => e.preventDefault());
+    jsonPushDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) {
+        jsonPushFileInput.files = e.dataTransfer.files;
+        setJsonPushFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    jsonPushBtn.addEventListener('click', async () => {
+      if (!jsonPushFile) return;
+      const examType = jsonPushExamType.value;
+      if (!confirm('Push the questions in "' + jsonPushFile.name + '" to the LIVE "' + examType + '" database? This cannot be undone.')) {
+        return;
+      }
+      jsonPushBtn.disabled = true;
+      jsonPushBtn.textContent = 'Pushing...';
+      jsonPushStatus.textContent = '';
+      jsonPushStatus.style.color = 'var(--muted)';
+
+      const formData = new FormData();
+      formData.append('file', jsonPushFile);
+      formData.append('exam_type', examType);
+      if (jsonPushExamCode.value.trim()) { formData.append('exam_code', jsonPushExamCode.value.trim()); }
+      formData.append('force', jsonPushForce.checked ? 'true' : 'false');
+
+      try {
+        const r = await fetch(API + '/push-json-to-live', { method: 'POST', body: formData });
+        const data = await r.json();
+        if (!r.ok) { throw new Error(data.detail || ('Server error: ' + r.status)); }
+        jsonPushStatus.textContent = 'Pushed ' + data.pushed_count + ', skipped ' + data.skipped_already_pushed +
+          ' (already live), failed ' + data.failed_count + '.';
+        jsonPushStatus.style.color = data.failed_count ? 'var(--coral)' : 'var(--teal-dark)';
+        if (data.failed_count) {
+          console.warn('push-json-to-live failures', data.failed);
+        }
+      } catch (err) {
+        jsonPushStatus.textContent = 'Could not push JSON file: ' + err.message;
+        jsonPushStatus.style.color = 'var(--coral)';
+      } finally {
+        jsonPushBtn.disabled = false;
+        jsonPushBtn.textContent = 'Push JSON to Live';
+      }
+    });
+
+    function groupIntoBatches(questions) {
+      const groups = new Map();
+      questions.forEach(q => {
+        const key = [
+          q.board || '', q.standard || '', q.group_name || '', q.subject || '',
+          q.source_filename || 'unknown', q.difficulty || ''
+        ].join('|');
+
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key,
+            batch_ids: new Set(),
+            source_filename: q.source_filename,
+            difficulty: q.difficulty,
+            created_at: q.created_at,
+            board: q.board, standard: q.standard, group_name: q.group_name, subject: q.subject,
+            questions: []
+          });
+        }
+        const group = groups.get(key);
+        if (q.batch_id) { group.batch_ids.add(q.batch_id); }
+        if (!group.created_at || (q.created_at || '') > group.created_at) { group.created_at = q.created_at; }
+        group.questions.push(q);
+      });
+      groups.forEach(group => {
+        group.questions.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+      });
+      return Array.from(groups.values()).sort((a, b) =>
+        (b.created_at || '').localeCompare(a.created_at || '')
+      );
+    }
+
+    function renderBatches(questions) {
+      historyList.innerHTML = '';
+
+      if (questions.length === 0) {
+        historyStatus.textContent = allHistoryQuestions.length === 0
+          ? 'No questions have been saved yet.'
+          : 'No saved questions match your search.';
+        return;
+      }
+
+      const batches = groupIntoBatches(questions);
+      historyStatus.textContent = batches.length + ' set(s), ' + questions.length + ' question(s) total.';
+
+      batches.forEach((batch) => {
+        const card = document.createElement('div');
+        card.className = 'history-batch';
+
+        const timestamp = batch.created_at ? batch.created_at.replace('T', ' ').slice(0, 19) : 'Unknown time';
+        const header = document.createElement('div');
+        header.className = 'history-batch-header';
+        const curriculumBits = [batch.board, batch.standard, batch.group_name, batch.subject].filter(Boolean).join(' \u00b7 ');
+        header.innerHTML =
+          '<div class="history-batch-meta">' +
+            '<span class="history-count">' + batch.questions.length + ' question(s)</span> &middot; ' +
+            (batch.source_filename || 'Unknown file') + ' &middot; ' +
+            batch.difficulty + ' &middot; ' + timestamp +
+            (curriculumBits ? '<br>' + curriculumBits : '') +
+          '</div>';
+
+        const actions = document.createElement('div');
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'history-toggle';
+        toggleBtn.textContent = 'Show questions';
+
+        const downloadSetBtn = document.createElement('button');
+        downloadSetBtn.className = 'btn btn-outline';
+        downloadSetBtn.textContent = 'Download TXT';
+        downloadSetBtn.style.marginLeft = '10px';
+        downloadSetBtn.addEventListener('click', () => {
+          const label = (batch.source_filename || 'set').replace(/\.[^/.]+$/, '') + '_' + batch.difficulty;
+          downloadAsText(batch.questions, label);
+        });
+
+        const downloadSetJsonBtn = document.createElement('button');
+        downloadSetJsonBtn.className = 'btn btn-outline';
+        downloadSetJsonBtn.textContent = 'Download JSON';
+        downloadSetJsonBtn.style.marginLeft = '10px';
+        downloadSetJsonBtn.addEventListener('click', () => {
+          const label = (batch.source_filename || 'set').replace(/\.[^/.]+$/, '') + '_' + batch.difficulty;
+          downloadAsJSON(batch.questions, label, batch.subject, batch.standard);
+        });
+
+        const deleteSetBtn = document.createElement('button');
+        deleteSetBtn.className = 'btn btn-outline';
+        deleteSetBtn.textContent = 'Delete this set';
+        deleteSetBtn.style.marginLeft = '10px';
+        deleteSetBtn.style.color = 'var(--coral)';
+        deleteSetBtn.style.borderColor = 'var(--coral)';
+        const batchIds = Array.from(batch.batch_ids);
+        if (batchIds.length === 0) {
+          deleteSetBtn.disabled = true;
+          deleteSetBtn.title = 'This older set can\'t be deleted individually.';
+        } else {
+          deleteSetBtn.addEventListener('click', async () => {
+            if (!confirm('Delete this set of ' + batch.questions.length + ' question(s)? This cannot be undone.')) {
+              return;
+            }
+            deleteSetBtn.disabled = true;
+            deleteSetBtn.textContent = 'Deleting...';
+            try {
+              const responses = await Promise.all(batchIds.map(id =>
+                fetch(API + '/questions/batch/' + encodeURIComponent(id) + '?owner_id=' + encodeURIComponent(OWNER_ID), {
+                  method: 'DELETE'
+                })
+              ));
+              const failed = responses.find(r => !r.ok);
+              if (failed) { throw new Error('Server error: ' + failed.status); }
+              
+              card.remove();
+              const idSet = new Set(batchIds);
+              allHistoryQuestions = allHistoryQuestions.filter(q => !idSet.has(q.batch_id));
+              const remaining = historyList.querySelectorAll('.history-batch').length;
+              let remainingQuestions = 0;
+              if (remaining > 0) {
+                const countElements = Array.from(historyList.querySelectorAll('.history-count'));
+                remainingQuestions = countElements.reduce((sum, el) => sum + Number.parseInt(el.textContent, 10), 0);
+              }
+              historyStatus.textContent = remaining === 0
+                ? 'No questions have been saved yet.'
+                : remaining + ' set(s), ' + remainingQuestions + ' question(s) total.';
+            } catch (err) {
+              deleteSetBtn.disabled = false;
+              deleteSetBtn.textContent = 'Delete this set';
+              alert('Could not delete this set: ' + err.message);
+            }
+          });
+        }
+
+        actions.appendChild(toggleBtn);
+        actions.appendChild(downloadSetBtn);
+        actions.appendChild(downloadSetJsonBtn);
+        actions.appendChild(deleteSetBtn);
+        header.appendChild(actions);
+        card.appendChild(header);
+
+        // Push-to-live gets its own clearly separated row so it doesn't
+        // crowd against the toggle/download/delete buttons above.
+        const pushRow = document.createElement('div');
+        pushRow.className = 'history-batch-push-row';
+
+        const pushLabel = document.createElement('span');
+        pushLabel.className = 'push-live-label';
+        pushLabel.textContent = 'Push to live:';
+
+        const examTypeSelect = document.createElement('select');
+        examTypeSelect.className = 'push-exam-type';
+        examTypeSelect.setAttribute('aria-label', 'Live exam type for this set');
+        [['daily', 'Daily'],['online', 'Online'] , ['schedule', 'Schedule']].forEach(([value, label]) => {
+          const opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = label;
+          examTypeSelect.appendChild(opt);
+        });
+
+        const pushBtnLabel = 'Push to Live (' + batch.questions.length + ')';
+        const pushBtn = document.createElement('button');
+        pushBtn.className = 'btn btn-push';
+        pushBtn.textContent = pushBtnLabel;
+        pushBtn.title = 'Sends every question in this set to the live exam database.';
+
+        const pushStatus = document.createElement('p');
+        pushStatus.className = 'push-status-text';
+
+        pushBtn.addEventListener('click', () => {
+          const dyQuesIds = batch.questions.map(q => q.dy_ques_id).filter(Boolean);
+          pushQuestionsToLive(dyQuesIds, examTypeSelect.value, pushStatus, pushBtn, pushBtnLabel);
+        });
+
+        pushRow.appendChild(pushLabel);
+        pushRow.appendChild(examTypeSelect);
+        pushRow.appendChild(pushBtn);
+        pushRow.appendChild(pushStatus);
+        card.appendChild(pushRow);
+
+        const questionsWrap = document.createElement('div');
+        questionsWrap.className = 'history-batch-questions';
+        renderQuestions(questionsWrap, batch.questions);
+        card.appendChild(questionsWrap);
+
+        toggleBtn.addEventListener('click', () => {
+          const expanded = questionsWrap.classList.toggle('expanded');
+          toggleBtn.textContent = expanded ? 'Hide questions' : 'Show questions';
+        });
+
+        historyList.appendChild(card);
+      });
+    }
+
+    historySearch.addEventListener('input', () => {
+      const term = historySearch.value.trim().toLowerCase();
+      if (!term) {
+        renderBatches(allHistoryQuestions);
+        return;
+      }
+      const filtered = allHistoryQuestions.filter(q => {
+        const haystack = [
+          q.question,
+          q.source_filename,
+          q.difficulty,
+          q.board, q.standard, q.group_name, q.subject,
+          q.options ? Object.values(q.options).join(' ') : ''
+        ].join(' ').toLowerCase();
+        return haystack.includes(term);
+      });
+      renderBatches(filtered);
+    });
+
+    loadHistoryBtn.addEventListener('click', () => {
+      historyStatus.textContent = 'Loading saved questions...';
+      historyList.innerHTML = '';
+
+      fetch(API + '/questions?owner_id=' + encodeURIComponent(OWNER_ID))
+        .then(r => { if (!r.ok) { throw new Error('Server error: ' + r.status); } return r.json(); })
+        .then(data => {
+          const ANSWER_NUM_TO_LETTER = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' };
+          allHistoryQuestions = data.questions.map(q => {
+            q.question = q.dy_question;
+            q.options = { A: q.dy_ans_1, B: q.dy_ans_2, C: q.dy_ans_3, D: q.dy_ans_4 };
+            q.answer = ANSWER_NUM_TO_LETTER[q.dy_correct_ans] || q.dy_correct_ans;
+            q.explanation = q.dy_explain;
+            return q;
+          });
+          renderBatches(allHistoryQuestions);
+        })
+        .catch(err => { historyStatus.textContent = 'Something went wrong: ' + err.message; });
+    });
+  </script>
+
+</body>
+</html>
