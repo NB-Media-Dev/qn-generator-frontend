@@ -5,10 +5,6 @@
   <title>Question Generator</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* Full-page, responsive layout. Overrides any narrow fixed-width box
-       from style.css so the app fills the browser like a real website on
-       desktop, and reflows cleanly on phones instead of floating in the
-       middle of a mostly-blank page. */
     html, body { height: 100%; }
     body {
       max-width: 1100px !important;
@@ -38,7 +34,6 @@
       background-color: var(--teal-tint); padding: 3px 8px; border-radius: 4px; margin-bottom: 10px;
     }
 
-    /* option buttons (count + difficulty) */
     .option-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
       gap: 12px; margin-top: 12px;
@@ -58,7 +53,6 @@
     #generateWrap { text-align: center; background: none; border: none; padding: 0; }
     #generateBtn { padding: 14px 40px; font-size: 16px; }
 
-    /* upload drop zone */
     .drop-zone {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       width: 100%; height: 200px; margin-top: 12px; border: 1.5px solid var(--border);
@@ -98,7 +92,6 @@
     #resultActions { display: none; margin-top: 12px; gap: 10px; flex-wrap: wrap; align-items: center; }
     #selectionStatus { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
 
-    /* JSON-file push-to-live section */
     #jsonPushDropZone { height: 120px; }
     .json-push-controls {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px;
@@ -280,15 +273,8 @@
   </div>
 
   <script>
-    const API = (function () {
-      const params = new URLSearchParams(window.location.search);
-      const override = params.get('api');
-      if (override) return override.replace(/\/$/, ''); 
-      if (window.location.protocol !== 'file:' && window.location.origin !== 'null') {
-        return window.location.origin;
-      }
-      return 'https://qn-generator-backend.onrender.com';
-    })();
+    // HARDCODED LIVE RENDER BACKEND URL TO PREVENT 404 ERRORS ON VERCEL
+    const API = 'https://qn-generator-backend.onrender.com';
 
     const BOARDS = [
       'CBSE',
@@ -304,21 +290,6 @@
       'Computer Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Computer Science'],
       'Pure Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Botany', 'Zoology'],
       'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Business Mathematics']
-    };
-
-    const LANGUAGE_CODE_MAP = {
-      'Tamil': 'TA001', 'English': 'EN002', 'Maths': 'MA003', 'Science': 'SC004',
-      'Social Science': 'SO005', 'Physics': 'PH006', 'Chemistry': 'CH007', 'Biology': 'BI008',
-      'Computer Science': 'CS009', 'Botany': 'BO010', 'Zoology': 'ZO011', 'Commerce': 'CO012',
-      'Economics': 'EC013', 'Accountancy': 'AC014', 'Business Mathematics': 'BM015'
-    };
-
-
-    const QUES_PREFIX_MAP = {
-      'Tamil': 'TA', 'English': 'EN', 'Maths': 'MA', 'Science': 'SC',
-      'Social Science': 'SO', 'Physics': 'PH', 'Chemistry': 'CH', 'Biology': 'BI',
-      'Computer Science': 'CS', 'Botany': 'BO', 'Zoology': 'ZO', 'Commerce': 'CO',
-      'Economics': 'EC', 'Accountancy': 'AC', 'Business Mathematics': 'BM', 'Mathematics': 'MA'
     };
 
     const ANSWER_LETTER_TO_NUM = { A: '1', B: '2', C: '3', D: '4' };
@@ -599,13 +570,6 @@
         const num = String(index + 1).padStart(3, '0');
         const fallbackPrefix = (q.dy_code || quesIdPrefixInput.value || dyCodeInput.value || 'AI').trim().toUpperCase();
         return {
-          // dy_ques_id / dy_code / ln_code / dy_order / dy_pattern / dy_seconds
-          // are all permanently assigned by the server the moment a question
-          // is generated and saved (see _build_dy_rows + _save_generated_questions
-          // in app.py), and the server now returns every one of them. Always
-          // use the saved value here so a download can never disagree with
-          // what's actually in the database. Only fall back to a computed
-          // guess for old cached data that predates this fix.
           "dy_ques_id": q.dy_ques_id || `${fallbackPrefix}${num}`,
           "dy_code": q.dy_code != null ? q.dy_code : 'AITSB7S01',
           "ln_code": q.ln_code || detectLnCode(q.question),
@@ -642,8 +606,6 @@
     downloadAllBtn.addEventListener('click', () => downloadAsText(lastQuestions, state.difficulty + '_all'));
     downloadAllJsonBtn.addEventListener('click', () => downloadAsJSON(lastQuestions, state.difficulty + '_all', state.subject, state.standard));
 
-    // Sends the given dy_ques_ids to the live external exam database for the
-    // chosen exam type. Mirrors the /push-to-live backend contract in app.py.
     async function pushQuestionsToLive(dyQuesIds, examType, statusEl, btnEl, baseLabel) {
       if (dyQuesIds.length === 0) {
         statusEl.textContent = 'Nothing to push - none of these questions have a dy_ques_id yet.';
@@ -679,9 +641,6 @@
       }
     }
 
-    // --- Push a standalone questions JSON file straight to the live DB ---
-    // Mirrors the /push-json-to-live backend contract in app.py: a
-    // multipart/form-data POST with the file plus exam_type/exam_code/force.
     const jsonPushDropZone = el('jsonPushDropZone');
     const jsonPushFileInput = el('jsonPushFileInput');
     const jsonPushDropText = el('jsonPushDropText');
@@ -883,8 +842,6 @@
         header.appendChild(actions);
         card.appendChild(header);
 
-        // Push-to-live gets its own clearly separated row so it doesn't
-        // crowd against the toggle/download/delete buttons above.
         const pushRow = document.createElement('div');
         pushRow.className = 'history-batch-push-row';
 

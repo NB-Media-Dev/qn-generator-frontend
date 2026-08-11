@@ -90,7 +90,6 @@
     .curriculum-group-meta { font-size: 12.5px; color: var(--muted); margin-left: 10px; font-weight: 600; }
     .empty-note { color: var(--muted); font-size: 13.5px; font-style: italic; }
 
-    /* nested curriculum tree: board > standard > group > subject > file */
     details.tree-level {
       border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
       margin-bottom: 12px; background-color: var(--card-bg);
@@ -155,10 +154,9 @@
   </div>
 
   <script>
+    // HARDCODED LIVE RENDER BACKEND URL TO PREVENT 404 ERRORS ON VERCEL
     const API = 'https://qn-generator-backend.onrender.com';
 
-    // Keep this block identical to the one in exam_frontend.html - it is the
-    // single source of truth for board/standard/group/subject options.
     const BOARDS = [
       'CBSE',
       'Tamil Nadu State Board (Tamil Medium)',
@@ -175,18 +173,6 @@
       'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Business Mathematics']
     };
 
-    const LANGUAGE_CODE_MAP = {
-      'Tamil': 'TA001', 'English': 'EN002', 'Maths': 'MA003', 'Science': 'SC004',
-      'Social Science': 'SO005', 'Physics': 'PH006', 'Chemistry': 'CH007', 'Biology': 'BI008',
-      'Computer Science': 'CS009', 'Botany': 'BO010', 'Zoology': 'ZO011', 'Commerce': 'CO012',
-      'Economics': 'EC013', 'Accountancy': 'AC014', 'Business Mathematics': 'BM015'
-    };
-    const QUES_PREFIX_MAP = {
-      'Tamil': 'TA', 'English': 'EN', 'Maths': 'MA', 'Science': 'SC',
-      'Social Science': 'SO', 'Physics': 'PH', 'Chemistry': 'CH', 'Biology': 'BI',
-      'Computer Science': 'CS', 'Botany': 'BO', 'Zoology': 'ZO', 'Commerce': 'CO',
-      'Economics': 'EC', 'Accountancy': 'AC', 'Business Mathematics': 'BM', 'Mathematics': 'MA'
-    };
     const ANSWER_LETTER_TO_NUM = { A: '1', B: '2', C: '3', D: '4' };
     const TAMIL_CHAR_RE = /[\u0B80-\u0BFF]/;
     function detectLnCode(questionText) {
@@ -244,7 +230,6 @@
     standardSelect.addEventListener('change', refreshStandardDependentUI);
     groupSelect.addEventListener('change', refreshStandardDependentUI);
 
-    // ---- Search filter dropdowns (independent of the "Not Yet Grouped" curriculum picker above) ----
     fillSelect(filterBoardSelect, BOARDS, 'All boards');
     fillSelect(filterStandardSelect, STANDARDS, 'All standards');
     fillSelect(filterGroupSelect, GROUPS, 'All groups');
@@ -307,7 +292,6 @@
       );
     }
 
-    // Board -> Standard -> Group (or '' if not applicable) -> Subject -> Filename -> [questions]
     function buildCurriculumTree(questions) {
       const boardsMap = new Map();
       questions.forEach(q => {
@@ -578,27 +562,16 @@
 
     function downloadAsJSON(questions, label) {
       const nowISO = new Date().toISOString();
-      // Legacy-only fallback: every question loaded from the database
-      // already carries the server-assigned dy_ques_id (prefix you typed +
-      // serial, e.g. AI8EN2001), so this branch only fires for old rows
-      // saved before that field existed. It now reuses that row's own
-      // dy_code as the prefix instead of guessing from subject+standard,
-      // so it can't collide with a different exam's IDs.
       const codeCounters = {};
       const formatted = questions.map((q) => {
         const fallbackPrefix = (q.dy_code || 'AI').trim().toUpperCase();
         codeCounters[fallbackPrefix] = (codeCounters[fallbackPrefix] || 0) + 1;
         const num = String(codeCounters[fallbackPrefix]).padStart(3, '0');
         return {
-          // dy_ques_id / dy_order are permanently assigned by the server the
-          // moment a question is generated and saved (see _build_dy_rows in
-          // app.py) - always use that saved id here so it never changes on
-          // a later download, and never drifts based on whatever board /
-          // standard / subject happens to be selected on screen right now.
           "dy_ques_id": q.dy_ques_id || `${fallbackPrefix}${num}`,
           "dy_code": "AITSB7S01",
           "ln_code": detectLnCode(q.question),
-          "dy_order": q.dy_order != null ? String(q.dy_order) : String(subjectCounters[prefix]),
+          "dy_order": q.dy_order != null ? String(q.dy_order) : String(codeCounters[fallbackPrefix]),
           "dy_pattern": 1,
           "dy_seconds": 18,
           "dy_question": q.question || "",
@@ -773,7 +746,7 @@
       const removeGroupBtn = document.createElement('button');
       removeGroupBtn.className = 'btn btn-danger btn-small';
       removeGroupBtn.textContent = 'Move unticked to Not Selected';
-      removeGroupBtn.title = 'Deselects the unticked questions but keeps them tagged to the same board / standard / group / subject - they will show up under "Not selected" here, not in Not Yet Grouped.';
+      removeGroupBtn.title = 'Deselects the unticked questions but keeps them tagged to the same board / standard / group / subject.';
       removeGroupBtn.addEventListener('click', async () => {
         const uncheckedIds = Array.from(fileBox.querySelectorAll('.q-pick:not(:checked)'))
           .map(cb => Number.parseInt(cb.dataset.qid, 10));
