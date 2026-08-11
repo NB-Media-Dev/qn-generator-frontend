@@ -283,15 +283,11 @@
     const API = (function () {
       const params = new URLSearchParams(window.location.search);
       const override = params.get('api');
-      if (override) return override.replace(/\/$/, '');
-      // When this page is served BY the FastAPI backend itself (e.g. mounted with
-      // StaticFiles, or opened through a tunnel/deployed URL), talk to whatever
-      // origin served it instead of a hardcoded address.
+      if (override) return override.replace(/\/$/, ''); 
       if (window.location.protocol !== 'file:' && window.location.origin !== 'null') {
         return window.location.origin;
       }
-      // Fallback for opening this file directly (file://) with the backend running locally.
-      return 'http://127.0.0.1:8000';
+      return ' https://qn-generator-backend.onrender.com';
     })();
 
     const BOARDS = [
